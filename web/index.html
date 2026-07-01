@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#14161c">
+<title>Zinester — printable zine & scrapbook layout</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%236ea8fe'/%3E%3Ctext x='16' y='23' font-size='20' font-family='sans-serif' font-weight='900' text-anchor='middle' fill='%230b1020'%3EZ%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div id="app">
+  <header>
+    <div class="brand"><span class="logo">Z</span><span>Zinester</span><small id="projName">Untitled</small></div>
+    <span id="connBadge" class="badge local" title="Storage backend">local</span>
+    <div class="sep"></div>
+    <div class="row">
+      <button id="btnUndo" title="Undo (Ctrl+Z)">↶</button>
+      <button id="btnRedo" title="Redo (Ctrl+Shift+Z)">↷</button>
+    </div>
+    <div class="spacer"></div>
+    <div class="row">
+      <label>Format</label>
+      <select id="selFormat" title="Fold format"></select>
+      <input id="accCount" type="number" min="2" max="12" value="4" style="width:58px;display:none" title="Accordion panels">
+      <label>Paper</label>
+      <select id="selPaper"><option value="A4">A4</option><option value="Letter">Letter</option></select>
+    </div>
+    <div class="sep"></div>
+    <div class="row">
+      <button id="btnEink" class="ghost" title="Toggle e-ink (1-bit) preview">◐ E-ink</button>
+      <button id="btnPrint" title="Print imposed sheet (Ctrl+P)">🖨 Print</button>
+      <button id="btnPng" title="Export active panel as PNG">🖼 PNG</button>
+      <button id="btnRightToggle" class="ghost" style="display:none">⚙</button>
+    </div>
+  </header>
+
+  <main>
+    <div id="left">
+      <button data-add="text" title="Add text (T)">T</button><span class="tlabel">Text</span>
+      <button data-add="image" title="Add / upload image (I)">🖼</button><span class="tlabel">Image</span>
+      <button data-add="rect" title="Add rectangle (R)">▭</button><span class="tlabel">Rect</span>
+      <button data-add="ellipse" title="Add ellipse (O)">◯</button><span class="tlabel">Oval</span>
+      <button data-add="line" title="Add line (L)">╱</button><span class="tlabel">Line</span>
+      <div class="sep" style="width:26px;height:1px;margin:6px 0"></div>
+      <button id="btnGrid" title="Toggle grid / snap (G)">▦</button><span class="tlabel">Grid</span>
+      <button id="btnHelp" title="Help (?)">?</button><span class="tlabel">Help</span>
+    </div>
+
+    <div id="center">
+      <div id="subbar">
+        <button id="btnPrev" title="Previous page">◀</button>
+        <div id="tabs"></div>
+        <button id="btnNext" title="Next page">▶</button>
+        <button id="btnAddPanel" title="Add page" style="display:none">＋</button>
+        <div class="sep"></div>
+        <span id="pageLabel" class="muted-note"></span>
+        <div class="spacer"></div>
+        <button id="btnFit" class="ghost" title="Fit to view">⤢ Fit</button>
+      </div>
+      <div id="stagewrap"><div id="stage"><div id="stagepad"></div></div></div>
+    </div>
+
+    <div id="right">
+      <div class="card" id="inspEmpty">
+        <h3>Canvas</h3>
+        <p class="muted-note">Select an element to edit it, or add one from the left toolbar. Drop or paste images anywhere on the page.</p>
+        <div class="field"><label>Page background</label><input type="color" id="panelBg" value="#ffffff"></div>
+      </div>
+
+      <div class="card" id="inspAsset" style="display:none">
+        <h3 id="inspTitle">Element</h3>
+        <div id="inspBody"></div>
+        <div class="btnrow" style="margin-top:10px">
+          <button id="aFront" title="Bring forward (])">⤒</button>
+          <button id="aBack" title="Send backward ([)">⤓</button>
+          <button id="aDup" title="Duplicate (Ctrl+D)">⧉</button>
+          <button id="aDel" class="danger" title="Delete (Del)">🗑</button>
+        </div>
+      </div>
+
+      <div class="card" id="galleryCard">
+        <h3>Assets
+          <span class="seg" id="galScope">
+            <button data-scope="shared" class="on">Shared</button>
+            <button data-scope="mine">Mine</button>
+          </span>
+        </h3>
+        <div class="gallery" id="gallery"><div class="gempty">No assets yet. Upload an image to get started.</div></div>
+        <button id="btnUpload" class="ghost" style="width:100%;margin-top:8px">⬆ Upload image</button>
+      </div>
+
+      <div class="card">
+        <h3>Project</h3>
+        <div class="field"><label>Name</label><input type="text" id="inpName" value="Untitled"></div>
+        <div class="btnrow" style="grid-template-columns:1fr 1fr">
+          <button id="btnSaveProj" class="primary">💾 Save</button>
+          <button id="btnOpenProj">📂 Open</button>
+        </div>
+        <div class="btnrow" style="grid-template-columns:1fr 1fr;margin-top:6px">
+          <button id="btnExport" class="ghost">⬇ Export</button>
+          <button id="btnImport" class="ghost">⬆ Import</button>
+        </div>
+        <div class="btnrow" style="grid-template-columns:1fr 1fr;margin-top:6px">
+          <button id="btnNew" class="ghost">✧ New</button>
+          <button id="btnClearPanel" class="ghost">✕ Clear page</button>
+        </div>
+        <p class="muted-note" id="autosaveNote" style="margin-top:8px"></p>
+      </div>
+
+      <div class="card">
+        <h3>You</h3>
+        <div class="field"><label>Display name</label><input type="text" id="inpAuthor" placeholder="anonymous" maxlength="40"></div>
+        <p class="muted-note">Shown on assets you share with other visitors.</p>
+      </div>
+    </div>
+  </main>
+</div>
+
+<div id="printRoot"></div>
+<style id="printPageStyle"></style>
+
+<input type="file" id="fileImg" accept="image/*" multiple style="display:none">
+<input type="file" id="fileProj" accept=".json,application/json" style="display:none">
+
+<div class="overlay" id="openOverlay">
+  <div class="modal">
+    <h2>Open project</h2>
+    <div class="seg" id="openScope" style="margin:8px 0">
+      <button data-scope="mine" class="on">Mine</button>
+      <button data-scope="shared">Shared</button>
+    </div>
+    <div id="projList"></div>
+    <div class="row" style="justify-content:flex-end;margin-top:14px"><button onclick="document.getElementById('openOverlay').classList.remove('open')">Close</button></div>
+  </div>
+</div>
+
+<div class="overlay" id="helpOverlay">
+  <div class="modal">
+    <h2>Zinester</h2>
+    <p class="muted-note">Lay out assets on each page, then a fold format prints with the correct imposition (page order + rotation) so you can cut &amp; fold a physical zine. Assets live on the device's SD card; mark one <b>Shared</b> to let other visitors reuse it.</p>
+    <h3 style="color:var(--muted);font-size:12px;letter-spacing:.6px;margin-bottom:0">SHORTCUTS</h3>
+    <div class="kbd-grid">
+      <kbd>T / I / R / O / L</kbd><span>Text / image / rect / oval / line</span>
+      <kbd>Del</kbd><span>Delete selection</span>
+      <kbd>Ctrl/⌘ + D</kbd><span>Duplicate</span>
+      <kbd>Ctrl/⌘ + Z</kbd><span>Undo · add Shift to redo</span>
+      <kbd>[ / ]</kbd><span>Send backward / bring forward</span>
+      <kbd>Arrows</kbd><span>Nudge (Shift = 10×)</span>
+      <kbd>G</kbd><span>Toggle grid &amp; snap</span>
+      <kbd>Ctrl/⌘ + P</kbd><span>Print imposed sheet</span>
+    </div>
+    <h3 style="color:var(--muted);font-size:12px;letter-spacing:.6px;margin:14px 0 0">FOLDING</h3>
+    <p class="muted-note" id="helpFold"></p>
+    <div class="row" style="justify-content:flex-end;margin-top:14px"><button class="primary" onclick="document.getElementById('helpOverlay').classList.remove('open')">Got it</button></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+<script type="module" src="app.js"></script>
+</body>
+</html>

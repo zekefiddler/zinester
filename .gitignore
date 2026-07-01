@@ -1,0 +1,6 @@
+# Runtime data (SD-card stand-in for the reference server)
+/data/
+node_modules/
+*.log
+.DS_Store
+.env

@@ -1,0 +1,13 @@
+{
+  "name": "zinester",
+  "version": "0.1.0",
+  "description": "Portable, dependency-free web editor for laying out printable cut-and-fold zines. Runs on a website, an ESP32+SD device, or fully offline in the browser.",
+  "type": "module",
+  "license": "MIT",
+  "author": "zekefiddler",
+  "scripts": {
+    "start": "node server/server.mjs",
+    "dev": "node server/server.mjs --port 8787"
+  },
+  "engines": { "node": ">=18" }
+}
