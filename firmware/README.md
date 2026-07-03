@@ -6,13 +6,18 @@ capture** using the board's OV2640. The visitor's browser does the editing; the
 board is a small web server + file store, with the camera as a bonus asset
 source.
 
-> **Status:** [`xiao_esp32s3_zinester/`](xiao_esp32s3_zinester/) is a reference
-> sketch. The board-specific hard parts — camera init, SD init, Wi-Fi AP, static
-> serving, `/api/health`, and camera **frame + capture** — are written against
-> the documented pinout and fully worked. Asset upload (multipart), asset
-> PATCH/DELETE, and the projects CRUD are marked `TODO` with the exact pattern to
-> follow (they mirror the capture/list handlers and the Node reference server).
-> **It has not been compiled or flashed here — verify on hardware.**
+> **Status:** [`xiao_esp32s3_zinester/`](xiao_esp32s3_zinester/) is
+> **feature-complete** against [`../docs/API.md`](../docs/API.md): static
+> serving, `/api/health`, camera **frame + capture**, full **assets** CRUD
+> (list, binary, upload, PATCH, DELETE) and full **projects** CRUD — all with
+> author-only ownership checks — written to mirror the Node reference server,
+> whose behaviour is verified end-to-end here. **The sketch itself has not been
+> compiled or flashed here — verify on hardware.**
+>
+> One deliberate caveat: image **upload** decodes the base64 data URL in RAM (to
+> match the client and Node server). Camera capture writes the JPEG straight to
+> the card and is unaffected. For very large uploads, add a multipart `onUpload`
+> handler that streams to the card — see below.
 
 ## This board (verified specs)
 
@@ -48,18 +53,18 @@ switch to joining your Wi-Fi in STA mode). Join it and browse to
 `http://192.168.4.1/`. The header badge should read **device** and a **📷**
 button appears in the toolbar because `/api/health` reports `camera: true`.
 
-## Finishing the TODOs
+## Optional: streamed multipart upload (large images)
 
-The remaining handlers are generic CRUD you can lift straight from
-[`../server/server.mjs`](../server/server.mjs):
-
-- **`POST /api/assets`** — prefer a multipart `onUpload` handler that streams
-  chunks to `/assets/<id>.<ext>` (keeps big images out of RAM), then append
-  metadata to `/assets/index.json` exactly like `handleCapture()`.
-- **`PATCH` / `DELETE /api/assets/:id`** — load the index, match `id`, require
-  `authorOf(req) == a["authorId"]`, rewrite / `SD.remove()`.
-- **Projects** — `/projects/<id>.json` docs + `/projects/index.json` metadata,
-  same author-only rule.
+The one place the sketch buffers in RAM is `POST /api/assets` (it base64-decodes
+the data URL, matching the client). If you want to support very large uploads,
+add a multipart `onUpload` handler that streams chunks straight to
+`/assets/<id>.<ext>` and then calls `registerAsset(...)` in the request
+callback — and switch `RemoteStore.putAsset` in [`../web/store.js`](../web/store.js)
+to send `FormData` instead of a JSON data URL (and teach
+[`../server/server.mjs`](../server/server.mjs) to parse multipart, so the
+website path keeps working too). Everything else already streams: camera capture
+writes the frame directly, and `GET /api/assets/:id` serves the file off the card
+without buffering.
 
 Cross-check every route against [`../docs/API.md`](../docs/API.md) — the frontend
 depends only on that contract.

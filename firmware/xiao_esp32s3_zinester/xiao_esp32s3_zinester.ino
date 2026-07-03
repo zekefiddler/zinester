@@ -2,12 +2,13 @@
 // Serves the frontend + storage/sharing API (see ../../docs/API.md) from the
 // microSD card, and adds camera capture using the onboard OV2640.
 //
-// STATUS: reference sketch — the camera/SD/Wi-Fi/static/health/capture paths are
-// written against the board's documented pinout, but this has NOT been compiled
-// or flashed here. Verify on hardware. Asset upload (multipart), PATCH/DELETE,
-// and the projects CRUD are marked TODO with the exact pattern to follow; they
-// mirror the fully-worked capture + list handlers below and the Node reference
-// server in ../../server/server.mjs.
+// STATUS: reference sketch — feature-complete against docs/API.md (assets +
+// projects CRUD, ownership checks, camera frame/capture), written to mirror the
+// Node reference server, whose behaviour is verified end-to-end. This sketch has
+// NOT itself been compiled or flashed here — verify on hardware. Known caveat:
+// image UPLOAD decodes the base64 data URL in RAM (matches the client + Node
+// server); for very large images add a multipart onUpload handler that streams
+// to the card. Camera capture avoids this entirely (writes the JPEG directly).
 //
 // Board setup (Arduino IDE): Tools → Board "XIAO_ESP32S3", PSRAM "OPI PSRAM".
 // Libraries: ESPAsyncWebServer (ESP32Async fork) + AsyncTCP, ArduinoJson.
@@ -20,7 +21,9 @@
 #include "SD.h"
 #include "SPI.h"
 #include <ESPAsyncWebServer.h>   // https://github.com/ESP32Async/ESPAsyncWebServer
+#include <AsyncJson.h>           // ships with ESPAsyncWebServer — buffers+parses JSON bodies
 #include <ArduinoJson.h>
+#include "mbedtls/base64.h"      // built-in; decodes uploaded data URLs
 
 // ---- config ----------------------------------------------------------------
 static const char* AP_SSID = "Zinester";     // SoftAP name; or switch to STA below
@@ -31,6 +34,8 @@ static const char* AP_PASS = "";             // "" = open network
 #define SD_MISO  8
 #define SD_MOSI  9
 #define SD_CS    21                            // NB: shared with the onboard LED
+
+#define MAX_ASSET_BYTES (8 * 1024 * 1024)      // per-asset cap; matches docs/API.md
 
 // OV2640 camera pins for the XIAO ESP32S3 Sense (== CAMERA_MODEL_XIAO_ESP32S3).
 #define PWDN_GPIO_NUM   -1
@@ -82,6 +87,35 @@ static const char* extForMime(const String& m) {
   if (m == "image/jpeg") return "jpg"; if (m == "image/png") return "png";
   if (m == "image/gif") return "gif"; if (m == "image/webp") return "webp"; return "bin";
 }
+static JsonArray asArray(JsonDocument& doc) {           // ensure the doc root is an array
+  JsonArray a = doc.as<JsonArray>(); return a.isNull() ? doc.to<JsonArray>() : a;
+}
+// Serialize an index entry as its public form: add "url", drop internal "file".
+static String publicEntry(JsonObjectConst m, const char* base) {
+  JsonDocument out; out.set(m); out["url"] = String(base) + (const char*)m["id"]; out.remove("file");
+  String s; serializeJson(out, s); return s;
+}
+static void sendJson(AsyncWebServerRequest* req, int code, const String& body) {
+  AsyncWebServerResponse* res = req->beginResponse(code, "application/json", body); cors(res); req->send(res);
+}
+static void sendErr(AsyncWebServerRequest* req, int code, const char* msg) {
+  sendJson(req, code, String("{\"error\":\"") + msg + "\"}");
+}
+
+// Append an asset's metadata to the index and return its public JSON. Shared by
+// camera capture and uploads.
+static String registerAsset(AsyncWebServerRequest* req, const String& id, const String& name,
+                            const String& mime, const String& file, size_t size, int w, int h,
+                            const String& visibility) {
+  JsonDocument idx; loadArray("/assets/index.json", idx); JsonArray arr = asArray(idx);
+  JsonObject m = arr.add<JsonObject>();
+  m["id"] = id; m["name"] = name; m["mime"] = mime; m["file"] = file; m["size"] = size;
+  m["w"] = w; m["h"] = h; m["visibility"] = (visibility == "shared") ? "shared" : "private";
+  m["authorId"] = authorOf(req); m["authorName"] = authorNameOf(req); m["createdAt"] = (double)millis();
+  String body = publicEntry(m, "/api/assets/");
+  saveArray("/assets/index.json", idx);
+  return body;
+}
 
 // ---- camera ----------------------------------------------------------------
 static bool initCamera() {
@@ -111,27 +145,59 @@ static void handleFrame(AsyncWebServerRequest* req) {
 }
 
 // POST /api/camera/capture — grab a frame, store it as an asset, return metadata.
-static void handleCapture(AsyncWebServerRequest* req) {
+// The request body {visibility,name} is parsed by the AsyncCallbackJsonWebHandler
+// registered in setup(); default to private when absent.
+static void handleCapture(AsyncWebServerRequest* req, JsonVariant json) {
   camera_fb_t* fb = esp_camera_fb_get();
-  if (!fb) { req->send(500, "application/json", "{\"error\":\"capture failed\"}"); return; }
+  if (!fb) return sendErr(req, 500, "capture failed");
   String id = newId("a_"); String file = "/assets/" + id + ".jpg";
   File out = SD.open(file, FILE_WRITE);
-  if (!out) { esp_camera_fb_return(fb); req->send(500, "application/json", "{\"error\":\"sd write\"}"); return; }
+  if (!out) { esp_camera_fb_return(fb); return sendErr(req, 500, "sd write"); }
   out.write(fb->buf, fb->len); out.close();
-  size_t len = fb->len; uint16_t w = fb->width, h = fb->height; esp_camera_fb_return(fb);
+  size_t len = fb->len; int w = fb->width, h = fb->height; esp_camera_fb_return(fb);
 
-  JsonDocument idx; loadArray("/assets/index.json", idx);
-  JsonObject m = idx.as<JsonArray>().add<JsonObject>();
-  m["id"] = id; m["name"] = "photo.jpg"; m["mime"] = "image/jpeg"; m["file"] = id + ".jpg";
-  m["size"] = len; m["w"] = w; m["h"] = h;
-  m["visibility"] = "private";           // honour body {visibility} if you parse it
-  m["authorId"] = authorOf(req); m["authorName"] = authorNameOf(req);
-  m["createdAt"] = (double)millis();
-  saveArray("/assets/index.json", idx);
+  JsonObject b = json.as<JsonObject>();
+  String vis = b["visibility"] | "private"; String name = b["name"] | "photo.jpg";
+  String body = registerAsset(req, id, name, "image/jpeg", id + ".jpg", len, w, h, vis);
+  sendJson(req, 201, body);
+}
 
-  JsonDocument outDoc; outDoc.set(m); outDoc["url"] = "/api/assets/" + id; outDoc.remove("file");
-  String body; serializeJson(outDoc, body);
-  AsyncWebServerResponse* res = req->beginResponse(201, "application/json", body); cors(res); req->send(res);
+// POST /api/assets — JSON { name, dataUrl, w, h, visibility }. Matches the client
+// and the Node reference server. NOTE: the base64 body is buffered in RAM; for
+// large images prefer a multipart onUpload handler that streams to the card.
+static void handleUpload(AsyncWebServerRequest* req, JsonVariant json) {
+  JsonObject b = json.as<JsonObject>();
+  String dataUrl = b["dataUrl"] | "";
+  int comma = dataUrl.indexOf(',');
+  int colon = dataUrl.indexOf(':');
+  if (comma < 0 || colon != 4) return sendErr(req, 400, "dataUrl required");
+  int semi = dataUrl.indexOf(';');
+  String mime = dataUrl.substring(5, (semi > 0 && semi < comma) ? semi : comma);
+  bool b64 = dataUrl.indexOf(";base64,") > 0;
+  const char* enc = dataUrl.c_str() + comma + 1;
+  size_t encLen = dataUrl.length() - (comma + 1);
+
+  size_t need = 0;
+  if (b64) { mbedtls_base64_decode(nullptr, 0, &need, (const unsigned char*)enc, encLen); }
+  else need = encLen;
+  if (need == 0 || need > MAX_ASSET_BYTES) return sendErr(req, 413, "asset too large");
+  uint8_t* buf = (uint8_t*)ps_malloc(need);
+  if (!buf) return sendErr(req, 500, "oom");
+  size_t outLen = need;
+  if (b64) {
+    if (mbedtls_base64_decode(buf, need, &outLen, (const unsigned char*)enc, encLen) != 0) {
+      free(buf); return sendErr(req, 400, "bad base64"); }
+  } else { memcpy(buf, enc, need); outLen = need; }
+
+  String id = newId("a_"); String ext = extForMime(mime); String file = "/assets/" + id + "." + ext;
+  File out = SD.open(file, FILE_WRITE);
+  if (!out) { free(buf); return sendErr(req, 500, "sd write"); }
+  out.write(buf, outLen); out.close(); free(buf);
+
+  String vis = b["visibility"] | "private"; String name = b["name"] | "asset";
+  int w = b["w"] | 0, h = b["h"] | 0;
+  String body = registerAsset(req, id, name, mime, id + "." + ext, outLen, w, h, vis);
+  sendJson(req, 201, body);
 }
 
 // ---- assets ----------------------------------------------------------------
@@ -161,6 +227,133 @@ static void handleAssetBinary(AsyncWebServerRequest* req, const String& id) {
     }
   }
   req->send(404, "application/json", "{\"error\":\"not found\"}");
+}
+static String idFromUrl(AsyncWebServerRequest* req) {   // last path segment of /api/x/:id
+  String u = req->url(); int i = u.lastIndexOf('/'); return i >= 0 ? u.substring(i + 1) : u;
+}
+// PATCH /api/assets/:id — author-only { visibility, name }.
+static void handleAssetPatch(AsyncWebServerRequest* req, JsonVariant json) {
+  String id = idFromUrl(req);
+  JsonDocument idx; loadArray("/assets/index.json", idx);
+  for (JsonObject a : idx.as<JsonArray>()) {
+    if (id == (const char*)a["id"]) {
+      if (String(a["authorId"] | "") != authorOf(req)) return sendErr(req, 403, "not owner");
+      JsonObject b = json.as<JsonObject>();
+      if (!b["visibility"].isNull()) { String v = b["visibility"].as<String>(); a["visibility"] = (v == "shared") ? "shared" : "private"; }
+      if (!b["name"].isNull()) a["name"] = b["name"].as<String>();
+      String body = publicEntry(a, "/api/assets/");
+      saveArray("/assets/index.json", idx);
+      return sendJson(req, 200, body);
+    }
+  }
+  sendErr(req, 404, "not found");
+}
+// DELETE /api/assets/:id — author-only.
+static void handleAssetDelete(AsyncWebServerRequest* req) {
+  String id = idFromUrl(req);
+  JsonDocument idx; loadArray("/assets/index.json", idx); JsonArray arr = idx.as<JsonArray>();
+  for (size_t i = 0; i < arr.size(); i++) {
+    JsonObject a = arr[i];
+    if (id == (const char*)a["id"]) {
+      if (String(a["authorId"] | "") != authorOf(req)) return sendErr(req, 403, "not owner");
+      SD.remove(String("/assets/") + (const char*)a["file"]);
+      arr.remove(i); saveArray("/assets/index.json", idx);
+      return sendJson(req, 200, "{\"ok\":true}");
+    }
+  }
+  sendErr(req, 404, "not found");
+}
+
+// ---- projects --------------------------------------------------------------
+// GET /api/projects?scope=mine|shared|all
+static void handleProjectsList(AsyncWebServerRequest* req) {
+  String scope = req->hasParam("scope") ? req->getParam("scope")->value() : "mine";
+  String me = authorOf(req);
+  JsonDocument idx; loadArray("/projects/index.json", idx);
+  JsonDocument out; JsonArray arr = out["projects"].to<JsonArray>();
+  for (JsonObject p : idx.as<JsonArray>()) {
+    String vis = p["visibility"] | "private"; String au = p["authorId"] | "";
+    bool ok = (scope == "shared") ? (vis == "shared") : (scope == "all") ? (vis == "shared" || au == me) : (au == me);
+    if (!ok) continue;
+    JsonObject o = arr.add<JsonObject>(); o.set(p); o.remove("file");
+  }
+  String body; serializeJson(out, body); sendJson(req, 200, body);
+}
+// GET /api/projects/:id — full doc { ...meta, data }.
+static void handleProjectGet(AsyncWebServerRequest* req) {
+  String id = idFromUrl(req);
+  JsonDocument idx; loadArray("/projects/index.json", idx);
+  for (JsonObject p : idx.as<JsonArray>()) {
+    if (id == (const char*)p["id"]) {
+      JsonDocument doc; File f = SD.open(String("/projects/") + (const char*)p["file"], FILE_READ);
+      if (!f) return sendErr(req, 404, "missing file");
+      DeserializationError e = deserializeJson(doc, f); f.close();
+      if (e) return sendErr(req, 500, "read error");
+      doc.remove("file"); String body; serializeJson(doc, body); return sendJson(req, 200, body);
+    }
+  }
+  sendErr(req, 404, "not found");
+}
+// Write a project doc file + return its metadata JSON (without data/file).
+static String writeProject(AsyncWebServerRequest* req, const String& id, JsonObject doc, const String& existingFile) {
+  String file = existingFile.length() ? existingFile : (id + ".json");
+  JsonDocument rec;
+  rec["id"] = id;
+  rec["name"] = (const char*)(doc["name"] | "Untitled");
+  rec["format"] = (const char*)(doc["format"] | "mini8");
+  String v = doc["visibility"] | "private"; rec["visibility"] = (v == "shared") ? "shared" : "private";
+  rec["authorId"] = authorOf(req); rec["authorName"] = authorNameOf(req);
+  rec["updatedAt"] = (double)millis();
+  if (!doc["thumb"].isNull()) rec["thumb"] = doc["thumb"];
+  // file on disk holds meta + full data
+  JsonDocument fileDoc; fileDoc.set(rec); fileDoc["file"] = file; fileDoc["data"] = doc;
+  File f = SD.open(String("/projects/") + file, FILE_WRITE);
+  if (f) { serializeJson(fileDoc, f); f.close(); }
+  String meta; serializeJson(rec, meta); return meta;   // rec has no data/file
+}
+// POST /api/projects — create from a full project doc.
+static void handleProjectPost(AsyncWebServerRequest* req, JsonVariant json) {
+  JsonObject doc = json.as<JsonObject>();
+  if (doc["panels"].isNull() || doc["format"].isNull()) return sendErr(req, 400, "invalid project");
+  String id = newId("p_");
+  String meta = writeProject(req, id, doc, "");
+  JsonDocument idx; loadArray("/projects/index.json", idx); JsonArray arr = asArray(idx);
+  JsonDocument mdoc; deserializeJson(mdoc, meta); JsonObject e = arr.add<JsonObject>();
+  e.set(mdoc.as<JsonObject>()); e["file"] = id + ".json";
+  saveArray("/projects/index.json", idx);
+  sendJson(req, 201, meta);
+}
+// PUT /api/projects/:id — author-only replace.
+static void handleProjectPut(AsyncWebServerRequest* req, JsonVariant json) {
+  String id = idFromUrl(req);
+  JsonDocument idx; loadArray("/projects/index.json", idx);
+  for (JsonObject p : idx.as<JsonArray>()) {
+    if (id == (const char*)p["id"]) {
+      if (String(p["authorId"] | "") != authorOf(req)) return sendErr(req, 403, "not owner");
+      String file = String((const char*)p["file"]);
+      String meta = writeProject(req, id, json.as<JsonObject>(), file);
+      JsonDocument mdoc; deserializeJson(mdoc, meta);
+      p.set(mdoc.as<JsonObject>()); p["file"] = file;
+      saveArray("/projects/index.json", idx);
+      return sendJson(req, 200, meta);
+    }
+  }
+  sendErr(req, 404, "not found");
+}
+// DELETE /api/projects/:id — author-only.
+static void handleProjectDelete(AsyncWebServerRequest* req) {
+  String id = idFromUrl(req);
+  JsonDocument idx; loadArray("/projects/index.json", idx); JsonArray arr = idx.as<JsonArray>();
+  for (size_t i = 0; i < arr.size(); i++) {
+    JsonObject p = arr[i];
+    if (id == (const char*)p["id"]) {
+      if (String(p["authorId"] | "") != authorOf(req)) return sendErr(req, 403, "not owner");
+      SD.remove(String("/projects/") + (const char*)p["file"]);
+      arr.remove(i); saveArray("/projects/index.json", idx);
+      return sendJson(req, 200, "{\"ok\":true}");
+    }
+  }
+  sendErr(req, 404, "not found");
 }
 
 // ---- setup / routes --------------------------------------------------------
@@ -196,24 +389,26 @@ void setup() {
   // camera
   if (haveCam) {
     server.on("/api/camera/frame.jpg", HTTP_GET, handleFrame);
-    server.on("/api/camera/capture", HTTP_POST, handleCapture);
+    auto* cap = new AsyncCallbackJsonWebHandler("/api/camera/capture", handleCapture);
+    cap->setMethod(HTTP_POST); server.addHandler(cap);
   }
 
-  // assets
+  // assets — GET list/binary + DELETE are plain routes; POST/PATCH carry a JSON
+  // body so they go through AsyncCallbackJsonWebHandler (prefix-matches /:id too).
   server.on("/api/assets", HTTP_GET, handleAssetsList);
   server.on("^\\/api\\/assets\\/([A-Za-z0-9_]+)$", HTTP_GET, [](AsyncWebServerRequest* req) {
     handleAssetBinary(req, req->pathArg(0));
   });
-  // TODO POST /api/assets — accumulate the request body (JSON {name,dataUrl,...}
-  //   via an onBody handler or, preferably, register an onUpload multipart
-  //   handler and stream chunks straight to /assets/<id>.<ext>), then append to
-  //   /assets/index.json exactly like handleCapture(). Enforce MAX_ASSET_BYTES.
-  // TODO PATCH/DELETE /api/assets/:id — load index, match id, require
-  //   authorOf(req) == a["authorId"], then rewrite / SD.remove the file.
+  server.on("^\\/api\\/assets\\/([A-Za-z0-9_]+)$", HTTP_DELETE, handleAssetDelete);
+  { auto* h = new AsyncCallbackJsonWebHandler("/api/assets", handleUpload); h->setMethod(HTTP_POST); server.addHandler(h); }
+  { auto* h = new AsyncCallbackJsonWebHandler("/api/assets", handleAssetPatch); h->setMethod(HTTP_PATCH); server.addHandler(h); }
 
-  // TODO projects — GET/POST /api/projects and GET/PUT/DELETE /api/projects/:id,
-  //   stored as /projects/<id>.json with /projects/index.json metadata; same
-  //   author-only rule. Mirror server/server.mjs.
+  // projects
+  server.on("/api/projects", HTTP_GET, handleProjectsList);
+  server.on("^\\/api\\/projects\\/([A-Za-z0-9_]+)$", HTTP_GET, handleProjectGet);
+  server.on("^\\/api\\/projects\\/([A-Za-z0-9_]+)$", HTTP_DELETE, handleProjectDelete);
+  { auto* h = new AsyncCallbackJsonWebHandler("/api/projects", handleProjectPost); h->setMethod(HTTP_POST); server.addHandler(h); }
+  { auto* h = new AsyncCallbackJsonWebHandler("/api/projects", handleProjectPut); h->setMethod(HTTP_PUT); server.addHandler(h); }
 
   // static frontend from the SD card (serves gzipped siblings automatically).
   server.serveStatic("/", SD, "/web/").setDefaultFile("index.html");
