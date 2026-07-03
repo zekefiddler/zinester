@@ -574,6 +574,11 @@ function wire() {
 
   $('#inpAuthor').oninput = () => { store.setAuthorName($('#inpAuthor').value.trim()); };
 
+  $('#btnCam').onclick = openCamera;
+  $('#camCancel').onclick = closeCamera;
+  $('#camSnap').onclick = snapPhoto;
+  $('#camOverlay').onclick = e => { if (e.target.id === 'camOverlay') closeCamera(); };
+
   $('#fileImg').onchange = async e => { const files = [...e.target.files];
     if (imgReplaceTarget) { const a = findAsset(imgReplaceTarget); if (a && files[0]) {
       try { const meta = await store.putAsset(files[0], { visibility: a._shared ? 'shared' : 'private', name: files[0].name });
@@ -619,7 +624,7 @@ function onKey(e) {
   if (meta) return;
   const a = selected();
   switch (e.key) {
-    case 'Escape': selId = null; render(); document.querySelectorAll('.overlay').forEach(o => o.classList.remove('open')); break;
+    case 'Escape': selId = null; render(); stopCamPreview(); document.querySelectorAll('.overlay').forEach(o => o.classList.remove('open')); break;
     case 'Delete': case 'Backspace': if (a) { e.preventDefault(); delSel(); } break;
     case 't': case 'T': addAsset('text'); break;
     case 'i': case 'I': imgReplaceTarget = null; galleryUpload = false; $('#fileImg').click(); break;
@@ -637,6 +642,23 @@ function onKey(e) {
         quickUpdate(a); drawSelReplace(a); clearTimeout(onKey._t); onKey._t = setTimeout(pushHistory, 300); } break;
   }
 }
+// --- camera -----------------------------------------------------------------
+let camTimer = null;
+function startCamPreview() { const img = $('#camPreview');
+  const tick = () => { img.src = store.cameraFrameURL(); }; tick();
+  clearInterval(camTimer); camTimer = setInterval(tick, 800); }
+function stopCamPreview() { clearInterval(camTimer); camTimer = null; }
+function openCamera() { if (!store.hasCamera) return; $('#camOverlay').classList.add('open'); startCamPreview(); }
+function closeCamera() { stopCamPreview(); $('#camOverlay').classList.remove('open'); }
+async function snapPhoto() {
+  try { const meta = await store.capturePhoto({ visibility: $('#camShare').checked ? 'shared' : 'private' });
+    if ($('#camShare').checked) meta.visibility = 'shared';
+    closeCamera(); await placeAsset(meta);
+    const a = selected(); if (a) a._shared = meta.visibility === 'shared';
+    refreshGallery(); toast('Photo captured'); }
+  catch (e) { toast('Capture failed: ' + e.message); }
+}
+
 function toast(msg) { const t = $('#toast'); t.textContent = msg; t.classList.add('show');
   clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove('show'), 1800); }
 
@@ -647,6 +669,7 @@ async function boot() {
   $('#connBadge').className = 'badge ' + (store.remote ? 'live' : 'local');
   $('#connBadge').title = store.remote ? `Connected: ${store.health?.name || 'backend'} — assets stored on device` : 'No backend — assets stored in this browser';
   $('#inpAuthor').value = store.author.name || '';
+  if (store.hasCamera) { $('#btnCam').style.display = 'grid'; $('#camLabel').style.display = 'block'; }
   wire();
   project = loadAutosave() || newProject('mini8');
   await resolveAssetURLs();

@@ -39,6 +39,7 @@
     <div id="left">
       <button data-add="text" title="Add text (T)">T</button><span class="tlabel">Text</span>
       <button data-add="image" title="Add / upload image (I)">🖼</button><span class="tlabel">Image</span>
+      <button id="btnCam" title="Capture from device camera" style="display:none">📷</button><span class="tlabel" id="camLabel" style="display:none">Photo</span>
       <button data-add="rect" title="Add rectangle (R)">▭</button><span class="tlabel">Rect</span>
       <button data-add="ellipse" title="Add ellipse (O)">◯</button><span class="tlabel">Oval</span>
       <button data-add="line" title="Add line (L)">╱</button><span class="tlabel">Line</span>
@@ -132,6 +133,21 @@
     </div>
     <div id="projList"></div>
     <div class="row" style="justify-content:flex-end;margin-top:14px"><button onclick="document.getElementById('openOverlay').classList.remove('open')">Close</button></div>
+  </div>
+</div>
+
+<div class="overlay" id="camOverlay">
+  <div class="modal" style="max-width:460px">
+    <h2>📷 Camera</h2>
+    <p class="muted-note">Live preview from the device. Capture stores the photo on the SD card as an asset and drops it onto the page.</p>
+    <div style="background:#0e1016;border:1px solid var(--line);border-radius:10px;overflow:hidden;aspect-ratio:4/3;display:grid;place-items:center;margin:10px 0">
+      <img id="camPreview" alt="camera preview" style="width:100%;height:100%;object-fit:contain">
+    </div>
+    <div class="field"><label>Share with visitors</label><input type="checkbox" id="camShare" style="flex:0"></div>
+    <div class="row" style="justify-content:flex-end;margin-top:8px">
+      <button id="camCancel">Cancel</button>
+      <button id="camSnap" class="primary">📸 Capture</button>
+    </div>
   </div>
 </div>
 

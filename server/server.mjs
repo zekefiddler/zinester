@@ -23,6 +23,12 @@ const PORT = parseInt(process.env.PORT || arg('--port', '8787'), 10);
 const DATA = path.resolve(ROOT, arg('--data', 'data'));
 const WEB  = path.resolve(ROOT, arg('--web', 'web'));
 const MAX_ASSET_BYTES = 8 * 1024 * 1024; // 8 MB per asset (tune for SD/RAM)
+// Mock camera lets us exercise the /api/camera flow without hardware. The real
+// XIAO ESP32S3 Sense firmware sets camera=true and returns live JPEG frames.
+const MOCK_CAMERA = argv.includes('--mock-camera') || process.env.MOCK_CAMERA === '1';
+// A small valid PNG used as the stand-in "camera frame" in mock mode.
+const MOCK_FRAME = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAYAAADED76LAAAAFElEQVR4nGNk+M9AAJEwUglBAQBhBQEBQNk5nQAAAABJRU5ErkJggg==', 'base64');
 
 const ASSET_DIR = path.join(DATA, 'assets');
 const PROJ_DIR  = path.join(DATA, 'projects');
@@ -94,22 +100,43 @@ async function listAssets(req, res, q) {
   }).sort((a, b) => b.createdAt - a.createdAt).map(publicAsset);
   send(res, 200, { assets: out });
 }
+// Persist an asset from a data URL + metadata. Shared by uploads and camera capture.
+async function persistAsset(dataUrl, { name, w, h, visibility, authorId, authorName }) {
+  const m = /^data:([^;,]+)(;base64)?,/.exec(dataUrl || '');
+  if (!m) throw Object.assign(new Error('dataUrl required'), { status: 400 });
+  const mime = m[1];
+  const bin = Buffer.from(dataUrl.slice(m[0].length), m[2] ? 'base64' : 'utf8');
+  if (bin.length > MAX_ASSET_BYTES) throw Object.assign(new Error('asset too large'), { status: 413 });
+  const id = uid('a_'); const ext = EXT[mime] || 'bin';
+  await fs.writeFile(path.join(ASSET_DIR, id + '.' + ext), bin);
+  const meta = { id, name: (name || 'asset').slice(0, 120), mime, file: id + '.' + ext,
+    size: bin.length, w: w || null, h: h || null,
+    visibility: visibility === 'shared' ? 'shared' : 'private',
+    authorId: authorId || '', authorName: authorName || '', createdAt: Date.now() };
+  const list = await readIndex(ASSET_IDX); list.push(meta); await writeIndex(ASSET_IDX, list);
+  return meta;
+}
 async function createAsset(req, res) {
   const raw = await readBody(req);
   let body; try { body = JSON.parse(raw.toString('utf8')); } catch { return send(res, 400, { error: 'invalid json' }); }
-  const m = /^data:([^;,]+)(;base64)?,/.exec(body.dataUrl || '');
-  if (!m) return send(res, 400, { error: 'dataUrl required' });
-  const mime = m[1];
-  const bin = Buffer.from(body.dataUrl.slice(m[0].length), m[2] ? 'base64' : 'utf8');
-  if (bin.length > MAX_ASSET_BYTES) return send(res, 413, { error: 'asset too large' });
-  const id = uid('a_');
-  const ext = EXT[mime] || 'bin';
-  await fs.writeFile(path.join(ASSET_DIR, id + '.' + ext), bin);
-  const meta = { id, name: (body.name || 'asset').slice(0, 120), mime, file: id + '.' + ext,
-    size: bin.length, w: body.w || null, h: body.h || null,
-    visibility: body.visibility === 'shared' ? 'shared' : 'private',
-    authorId: author(req), authorName: authorName(req), createdAt: Date.now() };
-  const list = await readIndex(ASSET_IDX); list.push(meta); await writeIndex(ASSET_IDX, list);
+  try {
+    const meta = await persistAsset(body.dataUrl, { name: body.name, w: body.w, h: body.h,
+      visibility: body.visibility, authorId: author(req), authorName: authorName(req) });
+    send(res, 201, publicAsset(meta));
+  } catch (e) { send(res, e.status || 500, { error: e.message }); }
+}
+
+// --- API: camera (device capability; mock in the reference server) ----------
+function cameraFrame(req, res) {
+  res.writeHead(200, { 'Content-Type': 'image/png', 'Cache-Control': 'no-store',
+    'Access-Control-Allow-Origin': '*' });
+  res.end(MOCK_FRAME);
+}
+async function cameraCapture(req, res) {
+  let body = {}; try { body = JSON.parse((await readBody(req)).toString('utf8') || '{}'); } catch {}
+  const dataUrl = 'data:image/png;base64,' + MOCK_FRAME.toString('base64');
+  const meta = await persistAsset(dataUrl, { name: body.name || 'photo.png', w: 8, h: 8,
+    visibility: body.visibility, authorId: author(req), authorName: authorName(req) });
   send(res, 201, publicAsset(meta));
 }
 function publicAsset(m) { const { file, ...rest } = m; return { ...rest, url: '/api/assets/' + m.id }; }
@@ -197,7 +224,17 @@ const server = http.createServer(async (req, res) => {
     if (!p.startsWith('/api/')) return serveStatic(req, res, p);
 
     if (p === '/api/health') return send(res, 200, { ok: true, name: 'zinester-reference',
-      storage: 'fs', sharing: true, maxAssetBytes: MAX_ASSET_BYTES, version: 1 });
+      storage: 'fs', sharing: true, camera: MOCK_CAMERA, maxAssetBytes: MAX_ASSET_BYTES, version: 1 });
+
+    // camera
+    if (p === '/api/camera/frame.jpg' && req.method === 'GET') {
+      if (!MOCK_CAMERA) return send(res, 404, { error: 'no camera' });
+      return cameraFrame(req, res);
+    }
+    if (p === '/api/camera/capture' && req.method === 'POST') {
+      if (!MOCK_CAMERA) return send(res, 404, { error: 'no camera' });
+      return cameraCapture(req, res);
+    }
 
     // assets
     if (p === '/api/assets' && req.method === 'GET') return listAssets(req, res, q);

@@ -6,7 +6,23 @@ the canvas work — the ESP32 is only a small web server + file store. The SD ca
 is a hard requirement: it holds uploaded assets and saved projects, and is what
 makes assets shareable between visitors.
 
-## Board selection (TBD — recommendations)
+## Target board: Seeed Studio XIAO ESP32S3 Sense
+
+The chosen board. It satisfies every requirement below and adds a camera:
+
+- ESP32-S3R8: **8 MB PSRAM**, 8 MB flash, Wi-Fi + BLE.
+- **microSD** slot on the Sense expansion board (SPI: `SCK=7, MISO=8, MOSI=9,
+  CS=21`; `SD.begin(21)`; FAT32, ≤32 GB).
+- **OV2640** 2 MP camera → an extra capability: **capture photos straight into a
+  zine** (`GET /api/camera/frame.jpg`, `POST /api/camera/capture`). The frontend
+  shows a 📷 button only when `health.camera` is true.
+- Caveat: `GPIO21` doubles as the onboard LED. Camera + SD coexist on the bare
+  Sense board; the known conflict is only with the **round-display** add-on (cut
+  its `J3` pads if you stack one).
+
+Firmware lives in [`../firmware/xiao_esp32s3_zinester/`](../firmware/xiao_esp32s3_zinester/).
+
+## Other boards (if you ever port it)
 
 Requirements that drive the choice:
 

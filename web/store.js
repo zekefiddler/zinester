@@ -74,6 +74,11 @@ class RemoteStore {
   deleteAsset(id) { return this._json('/api/assets/' + id, { method: 'DELETE' }); }
   assetURL(meta) { return this.base + (meta.url || ('/api/assets/' + meta.id)); }
 
+  get hasCamera() { return !!(this.health && this.health.camera); }
+  cameraFrameURL() { return this.base + '/api/camera/frame.jpg?t=' + Date.now(); }
+  capturePhoto(meta = {}) { return this._json('/api/camera/capture', { method: 'POST',
+    headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(meta) }); }
+
   async listProjects({ scope = 'mine' } = {}) { return (await this._json('/api/projects?scope=' + scope)).projects; }
   getProject(id) { return this._json('/api/projects/' + id); }
   async saveProject(doc) {
@@ -89,6 +94,7 @@ class RemoteStore {
 // ---------------------------------------------------------------------------
 class LocalStore {
   constructor() { this.remote = false; this.author = getAuthor(); this._db = null; this._urls = new Map(); }
+  get hasCamera() { return false; }
   setAuthorName(n) { this.author.name = n; localStorage.setItem(NAME_KEY, n); }
   _open() {
     if (this._db) return this._db;

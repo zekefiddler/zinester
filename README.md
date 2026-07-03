@@ -35,6 +35,8 @@ small, well-specified storage API that an ESP32 can implement directly. See
   grid, undo/redo, keyboard shortcuts.
 - **Shared asset gallery** — upload to the device's SD card and optionally mark
   an asset *Shared* so every visitor can reuse it.
+- **Camera capture** (on camera-equipped devices like the XIAO ESP32S3 Sense) —
+  snap a photo straight into a zine; it's stored as a shareable asset.
 - **Fold formats** with correct single-sided imposition: **8-page mini zine**,
   **accordion (N panels)**, **half-fold card**, **single page / poster**.
 - **Print** an imposed sheet (`window.print()` with true-size `@page`) including
@@ -72,9 +74,12 @@ With no `/api` backend the app runs fully client-side with IndexedDB storage.
 
 ## Run on the device
 
-See [`docs/DEVICE.md`](docs/DEVICE.md) for ESP32 board selection (SD card is a
-hard requirement) and [`firmware/`](firmware/) for a reference sketch that
-implements the same API against the SD card.
+Target board is the **Seeed Studio XIAO ESP32S3 Sense** (8 MB PSRAM, microSD,
+OV2640 camera). See [`docs/DEVICE.md`](docs/DEVICE.md) for the wiring/specs and
+[`firmware/xiao_esp32s3_zinester/`](firmware/xiao_esp32s3_zinester/) for the
+reference sketch that serves the frontend + API from the SD card and adds camera
+capture. To try the camera flow without hardware, run the reference server with
+`--mock-camera`.
 
 ## Layout
 

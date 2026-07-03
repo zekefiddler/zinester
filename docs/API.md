@@ -48,8 +48,11 @@ device/server backend exists.
 
 ```json
 { "ok": true, "name": "zinester-reference", "storage": "fs",
-  "sharing": true, "maxAssetBytes": 8388608, "version": 1 }
+  "sharing": true, "camera": false, "maxAssetBytes": 8388608, "version": 1 }
 ```
+
+`camera: true` advertises the optional camera capability (the XIAO ESP32S3 Sense
+firmware sets this). The frontend only shows camera UI when it is true.
 
 ### Assets
 
@@ -81,6 +84,19 @@ An **asset** is an uploaded file (image today; SVG/font later) plus metadata.
 - `GET /api/assets/:id/meta` — metadata only.
 - `PATCH /api/assets/:id` — author-only. Body may set `{ "visibility", "name" }`.
 - `DELETE /api/assets/:id` — author-only. Removes binary + metadata.
+
+### Camera (optional capability)
+
+Present only when `health.camera === true` (e.g. the XIAO ESP32S3 Sense with its
+OV2640). Lets a visitor snap a photo straight into a zine; the captured frame is
+stored as a normal **asset** (so it can be shared like any other).
+
+- `GET /api/camera/frame.jpg` — a single JPEG snapshot for live preview. Send
+  `Cache-Control: no-store`; the frontend cache-busts with a query param. Returns
+  `404` if there is no camera.
+- `POST /api/camera/capture` — capture a full-resolution frame and persist it as
+  an asset. Body (optional): `{ "name", "visibility" }`. Returns `201` with the
+  asset metadata (same shape as `POST /api/assets`).
 
 ### Projects
 
