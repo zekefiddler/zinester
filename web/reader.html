@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#14161c">
+<title>Zinester Reader — reading queue</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%236ea8fe'/%3E%3Ctext x='16' y='23' font-size='20' font-family='sans-serif' font-weight='900' text-anchor='middle' fill='%230b1020'%3EZ%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="reader.css">
+</head>
+<body class="reader">
+<div id="app">
+  <header>
+    <div class="brand"><span class="logo">Z</span><span>Zinester</span><small>Reader</small></div>
+    <span id="connBadge" class="badge local" title="Storage backend">local</span>
+    <span id="sumBadge" class="badge" title="Summary engine" style="display:none"></span>
+    <div class="spacer"></div>
+    <div class="row">
+      <input id="addFeedUrl" type="text" placeholder="Add feed URL…" style="width:210px">
+      <button id="btnAddFeed" title="Subscribe to an RSS/Atom feed">＋ Feed</button>
+      <button id="btnRefresh" class="primary" title="Fetch new items from all feeds">↻ Refresh</button>
+      <div class="sep"></div>
+      <a href="index.html" class="linkbtn" title="Back to the zine editor">✎ Editor</a>
+    </div>
+  </header>
+
+  <main>
+    <aside id="side">
+      <div class="card timer" id="timerCard">
+        <h3>Daily reading</h3>
+        <div class="timer-face"><span id="timerElapsed">0:00</span><small id="timerTarget">/ 45:00</small></div>
+        <div class="timer-bar"><div id="timerFill"></div></div>
+        <div class="row" style="margin-top:8px;gap:6px">
+          <button id="btnTimer" class="primary" style="flex:1">▶ Start</button>
+          <button id="btnTimerReset" class="ghost" title="Reset today's timer">↺</button>
+          <select id="timerGoal" title="Session length">
+            <option value="30">30m</option>
+            <option value="45" selected>45m</option>
+            <option value="60">60m</option>
+            <option value="90">90m</option>
+          </select>
+        </div>
+        <p class="muted-note" id="timerNote" style="margin-top:6px"></p>
+      </div>
+
+      <div class="card">
+        <h3>Queue</h3>
+        <div class="filters" id="filters">
+          <button data-state="unread" class="on">Unread <span class="ct" data-ct="unread">0</span></button>
+          <button data-state="reading">Reading <span class="ct" data-ct="reading">0</span></button>
+          <button data-state="starred">★ Starred <span class="ct" data-ct="starred">0</span></button>
+          <button data-state="read">Read <span class="ct" data-ct="read">0</span></button>
+          <button data-state="all">All <span class="ct" data-ct="all">0</span></button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Feeds <button id="btnRefreshHint" class="ghost mini-x" title="Refresh all" style="display:none"></button></h3>
+        <div id="feedList" class="feedlist"><div class="muted-note">No feeds yet.</div></div>
+      </div>
+    </aside>
+
+    <section id="content">
+      <div id="banner" class="banner" style="display:none"></div>
+      <div id="listHead" class="listhead"></div>
+      <div id="list" class="list"></div>
+    </section>
+  </main>
+</div>
+
+<div class="toast" id="toast"></div>
+<script type="module" src="reader.js"></script>
+</body>
+</html>

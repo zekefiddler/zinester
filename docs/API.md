@@ -48,11 +48,16 @@ device/server backend exists.
 
 ```json
 { "ok": true, "name": "zinester-reference", "storage": "fs",
-  "sharing": true, "camera": false, "maxAssetBytes": 8388608, "version": 1 }
+  "sharing": true, "camera": false, "reader": true, "summarizer": "extractive",
+  "maxAssetBytes": 8388608, "version": 1 }
 ```
 
 `camera: true` advertises the optional camera capability (the XIAO ESP32S3 Sense
 firmware sets this). The frontend only shows camera UI when it is true.
+`reader: true` advertises the content-curation capability (feeds + summaries);
+`summarizer` is `"extractive"` or `"claude"`. See [`READER.md`](READER.md) for
+the `/api/reader/*` endpoints. The frontend only shows the Reader when a backend
+advertises it.
 
 ### Assets
 

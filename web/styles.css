@@ -16,6 +16,9 @@ button:hover{border-color:var(--accent);background:#2a3040}
 button:active{transform:translateY(1px)}
 button.primary{background:linear-gradient(180deg,var(--accent),#4d86e6);border-color:#4d86e6;color:#0b1020;font-weight:600}
 button.ghost{background:transparent}
+a.linkbtn{display:inline-block;text-decoration:none;background:var(--panel2);border:1px solid var(--line);
+  color:var(--ink);padding:6px 10px;border-radius:8px;white-space:nowrap}
+a.linkbtn:hover{border-color:var(--accent);background:#2a3040}
 button.danger:hover{border-color:var(--danger);color:var(--danger)}
 button:disabled{opacity:.4;cursor:not-allowed}
 select,input[type=text],input[type=number],textarea{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:6px 8px}

@@ -1,0 +1,71 @@
+/* Zinester Reader — reading-queue view. Reuses tokens from styles.css. */
+body.reader{overflow:auto}
+body.reader main{display:flex;align-items:stretch}
+a{color:var(--accent)}
+
+#side{width:270px;flex:0 0 auto;background:var(--panel);border-right:1px solid var(--line);
+  overflow:auto;padding:12px;display:flex;flex-direction:column;gap:12px}
+#content{flex:1 1 auto;min-width:0;overflow:auto;padding:16px 18px 60px;display:flex;flex-direction:column;gap:12px}
+
+/* timer */
+.timer-face{display:flex;align-items:baseline;gap:6px;margin:2px 0 8px}
+.timer-face #timerElapsed{font-size:30px;font-weight:800;font-variant-numeric:tabular-nums;letter-spacing:.5px}
+.timer-face small{color:var(--muted);font-variant-numeric:tabular-nums}
+.timer-bar{height:7px;background:var(--panel);border:1px solid var(--line);border-radius:20px;overflow:hidden}
+.timer-bar #timerFill{height:100%;width:0;background:linear-gradient(90deg,var(--accent),var(--accent2));transition:width .4s}
+.card.timer.done .timer-bar #timerFill{background:linear-gradient(90deg,var(--good),#37b978)}
+#timerGoal{flex:0 0 auto;width:66px}
+
+/* filters */
+.filters{display:flex;flex-direction:column;gap:5px}
+.filters button{display:flex;justify-content:space-between;align-items:center;text-align:left;background:var(--panel);border-radius:8px}
+.filters button.on{background:var(--accent);color:#0b1020;font-weight:600;border-color:var(--accent)}
+.filters .ct{font-size:11px;background:#0006;color:inherit;border-radius:20px;padding:1px 8px;min-width:22px;text-align:center}
+.filters button.on .ct{background:#0b102022}
+
+/* feed list */
+.feedlist{display:flex;flex-direction:column;gap:4px;max-height:40vh;overflow:auto}
+.feeditem{display:flex;align-items:center;gap:6px;padding:5px 6px;border:1px solid var(--line);border-radius:8px;background:var(--panel2)}
+.feeditem .fname{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12.5px;cursor:pointer}
+.feeditem .fct{font-size:11px;color:var(--muted)}
+.feeditem.err{border-color:var(--danger)}
+.feeditem .fx{border:none;background:none;color:var(--muted);padding:2px 4px;font-size:12px;line-height:1}
+.feeditem .fx:hover{color:var(--danger);background:none}
+
+/* banner */
+.banner{background:#3a2f1a;border:1px solid #6b5324;color:#f2d79a;border-radius:10px;padding:10px 12px;font-size:13px;line-height:1.5}
+.banner code{background:#0004;padding:1px 6px;border-radius:5px}
+
+/* list */
+.listhead{display:flex;align-items:baseline;gap:10px;color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.6px}
+.listhead b{color:var(--ink);font-size:15px;text-transform:none;letter-spacing:0}
+.list{display:flex;flex-direction:column;gap:12px}
+.empty{color:var(--muted);text-align:center;padding:50px 10px}
+
+.item{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:14px 15px;display:flex;flex-direction:column;gap:8px}
+.item.reading{border-color:var(--accent)}
+.item.read{opacity:.62}
+.item .ititle{font-size:16.5px;font-weight:700;line-height:1.3}
+.item .ititle a{color:var(--ink);text-decoration:none}
+.item .ititle a:hover{color:var(--accent);text-decoration:underline}
+.item .imeta{display:flex;flex-wrap:wrap;gap:8px;align-items:center;font-size:12px;color:var(--muted)}
+.item .imeta .src{color:var(--ink);font-weight:600}
+.item .eng{font-size:10px;border:1px solid var(--line);border-radius:20px;padding:1px 7px;color:var(--muted)}
+.item .eng.claude{color:var(--accent2);border-color:var(--accent2)}
+.item .eng.feed{color:var(--good);border-color:#2b6}
+.item .isum{font-size:14px;line-height:1.55;color:var(--ink)}
+.item .iexcerpt{font-size:13px;line-height:1.6;color:var(--muted);border-left:2px solid var(--line);padding-left:10px;margin-top:2px;white-space:pre-wrap}
+.item .iactions{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:2px}
+.item .iactions .grow{flex:1}
+.item .iactions button{font-size:12px;padding:5px 9px}
+.item .iactions button.on{background:var(--accent);color:#0b1020;border-color:var(--accent);font-weight:600}
+.item .iactions .star.on{background:none;color:#ffcf4d;border-color:#ffcf4d}
+.item textarea.note{width:100%;min-height:64px;margin-top:4px;font-size:13px}
+.note-saved{font-size:11px;color:var(--good)}
+.chip{font-size:11px;background:var(--panel);border:1px solid var(--line);border-radius:20px;padding:1px 8px;color:var(--muted)}
+
+@media (max-width:760px){
+  #side{width:100%;position:static;border-right:none;border-bottom:1px solid var(--line)}
+  body.reader main{flex-direction:column}
+  header .row input#addFeedUrl{width:130px}
+}

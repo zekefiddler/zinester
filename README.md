@@ -46,6 +46,28 @@ small, well-specified storage API that an ESP32 can implement directly. See
   panel.
 - Project **save/open** (to the device or browser) and **export/import** `.json`.
 
+## Reader — gather feeds & newsletters, then compile a zine
+
+Zinester also has a **content-curation front end** for people who want to *read*
+first and *make* second. The **Reader** (`/reader.html`, or the 📚 button in the
+editor header) gathers RSS/Atom feeds and mailing-list emails, ingests each as a
+short **summary with attribution**, and gives you a daily reading queue:
+
+- **Feeds** — subscribe to any RSS/Atom feed; a starter set is pre-loaded.
+- **Summaries** — dependency-free by default (feed blurb / extractive); set
+  `ANTHROPIC_API_KEY` and it upgrades to Claude-written summaries.
+- **Read like a practice** — Unread / Reading / Starred / Read filters, per-item
+  notes that autosave, and a **daily 30–90 min reading timer**.
+- **Send to zine** — drop an article's title, summary, and a credit line onto
+  the next page of a "Reading Clippings" mini-zine, then jump into the editor to
+  lay it out. Attribution travels with the clipping.
+
+Newsletters arrive by email, so there's a generic import endpoint
+(`POST /api/reader/items`) that any inbox automation can push into the same
+queue. The Reader is a **server capability** (it fetches feeds), so it needs the
+reference backend running — the editor itself still works offline. Full docs:
+[`docs/READER.md`](docs/READER.md).
+
 ## Run the reference server (website / local dev)
 
 Zero npm dependencies — Node 18+ built-ins only:
@@ -85,10 +107,12 @@ capture. To try the camera flow without hardware, run the reference server with
 
 ```
 web/           the frontend (buildless ES modules): index.html, app.js, store.js, styles.css
-server/        zero-dependency Node reference backend (implements docs/API.md)
-docs/          API.md (storage/sharing contract), DEVICE.md (ESP32 plan)
+               + the Reader: reader.html, reader.js, reader.css
+server/        zero-dependency Node reference backend: server.mjs + reader.mjs (feeds/summaries)
+docs/          API.md (storage/sharing contract), READER.md (curation), DEVICE.md (ESP32 plan)
 firmware/      ESP32 + SD reference firmware notes/sketch
-data/          runtime store for the reference server (git-ignored)
+reader/        seed-feeds.json — starter feed subscriptions (loaded on first run)
+data/          runtime store for the reference server, incl. data/reader/ (git-ignored)
 ```
 
 ## License

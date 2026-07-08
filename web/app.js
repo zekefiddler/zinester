@@ -671,7 +671,14 @@ async function boot() {
   $('#inpAuthor').value = store.author.name || '';
   if (store.hasCamera) { $('#btnCam').style.display = 'grid'; $('#camLabel').style.display = 'block'; }
   wire();
-  project = loadAutosave() || newProject('mini8');
+  // Deep-link: reader's "Send to zine" opens the clippings project via ?project=<id>.
+  project = null;
+  const openId = new URLSearchParams(location.search).get('project');
+  if (openId) {
+    try { const full = await store.getProject(openId);
+      if (full) { project = full.data || full; project.id = openId; } } catch {}
+  }
+  project = project || loadAutosave() || newProject('mini8');
   await resolveAssetURLs();
   activePanel = 0; syncControls(); render(); updateUndo(); refreshGallery();
   $('#autosaveNote').textContent = 'Changes autosave to this browser.';
