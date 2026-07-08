@@ -68,6 +68,10 @@ queue. The Reader is a **server capability** (it fetches feeds), so it needs the
 reference backend running — the editor itself still works offline. Full docs:
 [`docs/READER.md`](docs/READER.md).
 
+For a daily habit, run it on an always-on box (Raspberry Pi / mini-PC / NAS):
+[`docs/DEPLOY.md`](docs/DEPLOY.md) has a systemd service + a daily
+feed-refresh timer (`deploy/`, `tools/refresh.mjs`).
+
 ## Run the reference server (website / local dev)
 
 Zero npm dependencies — Node 18+ built-ins only:
@@ -109,9 +113,11 @@ capture. To try the camera flow without hardware, run the reference server with
 web/           the frontend (buildless ES modules): index.html, app.js, store.js, styles.css
                + the Reader: reader.html, reader.js, reader.css
 server/        zero-dependency Node reference backend: server.mjs + reader.mjs (feeds/summaries)
-docs/          API.md (storage/sharing contract), READER.md (curation), DEVICE.md (ESP32 plan)
+docs/          API.md (contract), READER.md (curation), DEPLOY.md (always-on box), DEVICE.md (ESP32)
 firmware/      ESP32 + SD reference firmware notes/sketch
 reader/        seed-feeds.json — starter feed subscriptions (loaded on first run)
+deploy/        systemd service + daily-refresh timer for an always-on host
+tools/         refresh.mjs — pokes /api/reader/refresh (used by the timer/cron)
 data/          runtime store for the reference server, incl. data/reader/ (git-ignored)
 ```
 

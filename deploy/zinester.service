@@ -1,0 +1,31 @@
+# Zinester server — runs the zine editor + Reader API on an always-on box.
+# Install:  sudo cp deploy/zinester.service /etc/systemd/system/
+# Edit User / WorkingDirectory / --port below to match your box, then:
+#   sudo systemctl daemon-reload && sudo systemctl enable --now zinester
+[Unit]
+Description=Zinester — zine editor + reading-queue server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=zinester
+Group=zinester
+# Absolute path to your clone:
+WorkingDirectory=/opt/zinester
+# StateDirectory creates + owns /var/lib/zinester (persists your feeds, items, notes,
+# saved zines) across restarts and code updates.
+StateDirectory=zinester
+ExecStart=/usr/bin/env node server/server.mjs --port 8787 --data /var/lib/zinester
+Restart=on-failure
+RestartSec=5
+# Optional env (Claude summaries, etc.) — the leading "-" makes it optional:
+EnvironmentFile=-/etc/zinester.env
+# Light hardening:
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

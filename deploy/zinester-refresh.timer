@@ -1,0 +1,12 @@
+# Fires zinester-refresh.service once a day (with catch-up if the box was off).
+# Install:  sudo cp deploy/zinester-refresh.{service,timer} /etc/systemd/system/
+#   sudo systemctl daemon-reload && sudo systemctl enable --now zinester-refresh.timer
+[Unit]
+Description=Zinester — daily feed refresh
+
+[Timer]
+OnCalendar=*-*-* 06:00:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

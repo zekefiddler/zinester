@@ -1,0 +1,14 @@
+# Daily feed refresh (paired with zinester-refresh.timer). Pulls new items from
+# every subscribed feed — a credential-free "auto-ingest" for any newsletter
+# that publishes RSS/Atom. Install alongside zinester.service.
+[Unit]
+Description=Zinester — refresh feeds
+After=zinester.service
+Wants=zinester.service
+
+[Service]
+Type=oneshot
+User=zinester
+Group=zinester
+WorkingDirectory=/opt/zinester
+ExecStart=/usr/bin/env node tools/refresh.mjs http://127.0.0.1:8787
